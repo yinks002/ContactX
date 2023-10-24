@@ -119,6 +119,39 @@ export function UpdatePrice(id: string, Price:nat64):Result<Info, string>{
 }
 
 $update
-export function buyProduct(id: string){
+export async function buyInfo(InfoId: string):Promise<Result<Info, string>>{
+    const existingUser = UserStore.get(ic.caller().toString()).Some;
+    if(!existingUser?.Address){
+        return Result.Err<Info, string>("user doesnt exist")
+    }
+    if(!initialized){
+        ic.trap("canister not yet initialized")
+    }
+    return match(Infostore.get(InfoId),{
 
+        Some: async(info)=>{
+            if(info.sold== true){
+                return Result.Err<Info, string>("the information has been sold already")
+            }
+            let status = (await tokenCanister.transfer(ic.caller().toString(),info.owner.toString(),info.Price).call()).Ok
+            if(!status){
+                ic.trap("transactio failed")
+            }
+            const updatedInfo:Info= {...info, sold: true,owner:ic.caller()}
+            return Result.Ok<Info, string>(updatedInfo)
+        },
+        None:()=>Result.Err<Info, string>(`info with id ${InfoId} not found`)
+    })
+}
+
+$update
+export async function getFaucetTokens():Promise<Result<Boolean, string>>{
+    const caller = ic.caller();
+    return tokenCanister.transfer(icpCanister, caller.toString(),1000n).call()
+}
+
+$query
+export async function LocalWalletBalance():Promise<Result<nat64, string>>{
+    let caller = ic.caller().toString();
+    return await tokenCanister.balance(caller).call();
 }
